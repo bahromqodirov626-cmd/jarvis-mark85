@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="uz" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STARK INDUSTRIES // J.A.R.V.I.S MARK-85</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        hud: {
+                            cyan: '#00f3ff',
+                            electric: '#38bdf8',
+                            panel: 'rgba(4, 16, 32, 0.85)',
+                            border: 'rgba(0, 243, 255, 0.28)'
+                        }
+                    },
+                    fontFamily: {
+                        orbitron: ['Orbitron', 'sans-serif'],
+                        rajdhani: ['Rajdhani', 'sans-serif'],
+                        mono: ['Share Tech Mono', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <style>
+        :root {
+            --glow-cyan: rgba(0, 243, 255, 0.65);
+            --bg-deep: #020617;
+        }
+        html, body {
+            height: 100vh;
+            overflow: hidden;
+            background-color: var(--bg-deep);
+            color: #e2e8f0;
+            font-family: 'Rajdhani', sans-serif;
+            background-image: 
+                radial-gradient(circle at 50% 15%, rgba(2, 132, 199, 0.18) 0%, transparent 65%),
+                linear-gradient(rgba(0, 243, 255, 0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 243, 255, 0.035) 1px, transparent 1px);
+            background-size: 100% 100%, 32px 32px, 32px 32px;
+        }
+
+        .scanlines {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.22) 50%);
+            background-size: 100% 4px;
+            z-index: 99;
+            opacity: 0.35;
+        }
+
+        .hud-card {
+            background: rgba(4, 16, 32, 0.78);
+            border: 1px solid rgba(0, 243, 255, 0.28);
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.08);
+            backdrop-filter: blur(14px);
+            position: relative;
+        }
+        .hud-card::before {
+            content: ''; position: absolute; top: -1px; left: -1px;
+            width: 10px; height: 10px; border-top: 2px solid #00f3ff; border-left: 2px solid #00f3ff;
+        }
+        .hud-card::after {
+            content: ''; position: absolute; bottom: -1px; right: -1px;
+            width: 10px; height: 10px; border-bottom: 2px solid #00f3ff; border-right: 2px solid #00f3ff;
+        }
+
+        @keyframes spin-cw { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes spin-ccw { from { transform: rotate(360deg); } to { transform: rotate(-360deg); } }
+        .spin-cw-slow { animation: spin-cw 26s linear infinite; transform-origin: center; }
+        .spin-ccw-slow { animation: spin-ccw 20s linear infinite; transform-origin: center; }
+        .spin-cw-fast { animation: spin-cw 8s linear infinite; transform-origin: center; }
+
+        @keyframes pulse-reactor {
+            0% { transform: scale(1); filter: drop-shadow(0 0 20px rgba(0,243,255,0.7)); }
+            50% { transform: scale(1.05); filter: drop-shadow(0 0 35px rgba(0,243,255,0.95)); }
+            100% { transform: scale(1); filter: drop-shadow(0 0 20px rgba(0,243,255,0.7)); }
+        }
+        .reactor-pulse-anim { animation: pulse-reactor 3s ease-in-out infinite; }
+
+        /* Камера в правой колонке строго под журналом */
+        .hud-cam-container {
+            width: 100%;
+            height: 165px;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #020617;
+            position: relative;
+            border: 1px solid rgba(0, 243, 255, 0.4);
+            box-shadow: inset 0 0 15px rgba(0, 243, 255, 0.2);
+        }
+        .hud-cam-container video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            display: block;
+        }
+
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-track { background: rgba(2, 6, 23, 0.8); }
+        ::-webkit-scrollbar-thumb { background: rgba(0, 243, 255, 0.4); border-radius: 4px; }
+    </style>
+</head>
+<body class="flex flex-col justify-between h-screen select-none">
+    <div class="scanlines"></div>
+
+    <header class="w-full border-b border-hud-cyan/25 bg-slate-950/90 px-6 py-2.5 flex items-center justify-between gap-4 z-50 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-full border border-hud-cyan/60 bg-cyan-950/40 flex items-center justify-center shadow-[0_0_12px_rgba(0,243,255,0.4)]">
+                <i class="fa-solid fa-atom text-hud-cyan animate-pulse"></i>
+            </div>
+            <div>
+                <span class="font-orbitron font-black text-lg tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-hud-cyan via-sky-200 to-amber-300">
+                    J.A.R.V.I.S
+                </span>
+                <span class="ml-1 text-[10px] font-mono px-1 rounded bg-cyan-500/10 text-hud-cyan border border-hud-cyan/30">MARK-85</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-6 font-mono text-xs">
+            <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                <span class="text-slate-400">EGASI:</span>
+                <span class="text-emerald-400 font-bold">BAHROMJON</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-brain text-hud-cyan"></i>
+                <span class="text-slate-400">DVIGATEL:</span>
+                <span class="text-hud-cyan font-semibold">OmniRoute (:20128)</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <i class="fa-solid fa-microphone text-amber-400"></i>
+                <span class="text-slate-400">OVOZ:</span>
+                <span class="text-amber-400 font-semibold">Madina AI (2s Smart Silence)</span>
+            </div>
+        </div>
+
+        <div class="font-mono text-right">
+            <div id="live-time" class="text-sm font-bold text-hud-cyan font-orbitron tracking-widest">00:00:00</div>
+            <div class="text-[9px] text-slate-400">NAMANGAN (UTC+5)</div>
+        </div>
+    </header>
+
+    <main class="w-full max-w-[1800px] mx-auto p-4 grid grid-cols-12 gap-4 flex-1 overflow-hidden">
+        
+        <!-- ЛЕВАЯ КОЛОНКА -->
+        <aside class="col-span-3 flex flex-col gap-4 overflow-hidden">
+            <div class="hud-card p-4 rounded-xl shrink-0">
+                <div class="flex justify-between pb-2 mb-2 border-b border-hud-cyan/20 font-orbitron text-xs text-hud-cyan">
+                    <span><i class="fa-solid fa-bolt text-amber-400 mr-1"></i> REAKTOR QUVVATI</span>
+                    <span class="text-emerald-400 font-mono">100% OPTIMAL</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                    <div class="relative w-24 h-24 flex items-center justify-center shrink-0">
+                        <svg class="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="40" stroke="rgba(0,243,255,0.15)" stroke-width="6" fill="transparent"/>
+                            <circle cx="50" cy="50" r="40" stroke="#00f3ff" stroke-width="6" fill="transparent" stroke-dasharray="251" stroke-dashoffset="25"/>
+                        </svg>
+                        <div class="absolute text-center">
+                            <div class="font-orbitron font-bold text-lg text-slate-100">3.8</div>
+                            <div class="text-[8px] font-mono text-hud-cyan">GIGAWATT</div>
+                        </div>
+                    </div>
+                    <div class="flex-1 space-y-1 font-mono text-xs">
+                        <div class="flex justify-between border-b border-slate-800 pb-1">
+                            <span class="text-slate-400">HARORAT:</span>
+                            <span class="text-amber-400 font-bold">42.2 °C</span>
+                        </div>
+                        <div class="flex justify-between border-b border-slate-800 pb-1">
+                            <span class="text-slate-400">BOSIM:</span>
+                            <span class="text-hud-cyan font-bold">99.8 kPa</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">HOLAT:</span>
+                            <span class="text-emerald-400 font-bold">BARQAROR</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="hud-card p-4 rounded-xl flex-1 flex flex-col justify-between overflow-hidden">
+                <div class="space-y-3 font-mono text-xs">
+                    <div class="text-hud-cyan font-orbitron text-xs pb-2 border-b border-hud-cyan/20">
+                        <i class="fa-solid fa-microchip mr-1"></i> TIZIM RESURSLARI
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-slate-400">CPU YUKLAMASI</span>
+                            <span class="text-hud-cyan font-bold" id="cpu-load-txt">22%</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                            <div id="cpu-load-bar" class="h-full bg-hud-cyan" style="width: 22%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-slate-400">RAM XOTIRA</span>
+                            <span class="text-amber-400 font-bold">3.6 GB / 16 GB</span>
+                        </div>
+                        <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                            <div class="h-full bg-amber-400" style="width: 25%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-3 border-t border-hud-cyan/20">
+                    <button type="button" onclick="triggerQuickPrompt('Tizim holati haqida axborot ber')" class="w-full p-2.5 rounded bg-cyan-950/40 border border-hud-cyan/30 hover:border-hud-cyan text-left font-mono text-xs transition flex items-center justify-between">
+                        <span><i class="fa-solid fa-shield-virus text-hud-cyan mr-2"></i> Tizim diagnostikasi</span>
+                        <i class="fa-solid fa-chevron-right text-[10px] text-hud-cyan"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ЦЕНТРАЛЬНАЯ КОЛОНКА -->
+        <section class="col-span-6 flex flex-col gap-4 overflow-hidden h-full">
+            <div class="hud-card p-4 rounded-xl flex flex-col items-center justify-center shrink-0 min-h-[250px] relative overflow-hidden bg-gradient-to-b from-cyan-950/30 via-slate-950 to-slate-950">
+                <div class="absolute inset-0 flex items-center justify-center pointer-events-none opacity-50">
+                    <svg class="w-[380px] h-[380px] spin-cw-slow" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="48" stroke="#00f3ff" stroke-width="0.6" fill="none" stroke-dasharray="4, 4"/>
+                        <circle cx="50" cy="50" r="43" stroke="#38bdf8" stroke-width="0.8" stroke-dasharray="14, 5" fill="none"/>
+                    </svg>
+                    <svg class="absolute w-[320px] h-[320px] spin-ccw-slow" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="46" stroke="#f59e0b" stroke-width="0.5" stroke-dasharray="18, 6" fill="none"/>
+                    </svg>
+                </div>
+
+                <div id="reactor-interactive-core" onclick="manualActivate()" 
+                     class="relative z-10 w-36 h-36 rounded-full border-2 border-hud-cyan bg-slate-950 flex items-center justify-center cursor-pointer transition transform hover:scale-105 active:scale-95 reactor-pulse-anim shadow-[0_0_45px_rgba(0,243,255,0.8)]">
+                    <svg class="w-full h-full spin-cw-fast absolute" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="37" stroke="#00f3ff" stroke-width="1.8" stroke-dasharray="10, 6" fill="none"/>
+                        <circle cx="50" cy="50" r="29" stroke="#f59e0b" stroke-width="1.2" stroke-dasharray="5, 4" fill="none"/>
+                    </svg>
+                    <div class="w-20 h-20 rounded-full border border-hud-cyan bg-cyan-950 flex items-center justify-center shadow-[inset_0_0_25px_#00f3ff]">
+                        <i class="fa-solid fa-atom text-3xl text-hud-cyan animate-spin" style="animation-duration: 7s;"></i>
+                    </div>
+                </div>
+
+                <div class="z-10 mt-3 text-center">
+                    <span id="voice-hud-indicator" class="font-orbitron text-xs tracking-widest text-hud-cyan font-bold uppercase">
+                        JARVIS // TIZIM TAYYOR (EKRANGA BIR BOSING)
+                    </span>
+                </div>
+
+                <!-- Динамическая полоса 2-секундной паузы от Claude -->
+                <div class="w-64 h-1 bg-cyan-950/80 rounded-full mt-2 overflow-hidden border border-cyan-800/40 z-10">
+                    <div id="silenceFill" class="h-full bg-hud-cyan transition-none" style="width:0%"></div>
+                </div>
+
+                <canvas id="waveform-canvas" class="w-full max-w-md h-8 mt-1 z-10 opacity-90"></canvas>
+            </div>
+
+            <!-- ЧАТ -->
+            <div class="hud-card rounded-xl flex-1 flex flex-col overflow-hidden">
+                <div class="px-4 py-2 border-b border-hud-cyan/20 flex justify-between items-center font-mono text-xs bg-slate-900/60">
+                    <span class="text-hud-cyan"><i class="fa-solid fa-terminal mr-2"></i>ALOQA VA BUYRUQLAR JURNALI</span>
+                    <button type="button" onclick="clearDialogLog()" class="text-slate-400 hover:text-hud-cyan transition"><i class="fa-solid fa-trash-can mr-1"></i>TOZALASH</button>
+                </div>
+
+                <div id="hud-chat-feed" class="flex-1 p-3 overflow-y-auto space-y-3 font-rajdhani text-sm"></div>
+
+                <div class="p-2.5 border-t border-hud-cyan/25 bg-slate-950/90 flex items-center gap-2 shrink-0">
+                    <button type="button" id="mic-toggle-btn" onclick="manualActivate()" class="w-10 h-10 rounded-lg border border-hud-cyan/40 bg-cyan-950/40 text-hud-cyan flex items-center justify-center transition shrink-0">
+                        <i class="fa-solid fa-microphone text-sm"></i>
+                    </button>
+                    <input type="text" id="hud-user-input" onkeydown="handleInputKey(event)" placeholder="Buyruq bering yoki mikrofondan gapiring..." class="flex-1 bg-slate-900 border border-hud-cyan/30 focus:border-hud-cyan focus:outline-none rounded-lg px-3 py-2 text-sm text-slate-100 placeholder-slate-500 font-rajdhani">
+                    <button type="button" onclick="submitUserCommand()" class="px-4 h-10 rounded-lg bg-hud-cyan hover:bg-sky-400 text-slate-950 font-orbitron font-bold text-xs flex items-center gap-2 transition shrink-0">
+                        <span>YUBORISH</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ПРАВАЯ КОЛОНКА (С КАМЕРОЙ ПОД ЖУРНАЛОМ) -->
+        <aside class="col-span-3 flex flex-col gap-3.5 overflow-hidden">
+            <div class="hud-card p-3.5 rounded-xl shrink-0">
+                <div class="flex justify-between pb-1.5 mb-1.5 border-b border-hud-cyan/20 font-orbitron text-xs text-hud-cyan">
+                    <span><i class="fa-solid fa-cloud-sun text-amber-400 mr-1"></i> NAMANGAN METEOROLOGIYA</span>
+                    <span class="text-emerald-400 font-mono text-[10px]">REAL VAQT</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 font-mono text-xs">
+                    <div class="p-2.5 bg-slate-900/60 rounded-lg border border-hud-cyan/20">
+                        <div class="text-slate-400 text-[9px]">HARORAT</div>
+                        <div class="text-lg font-orbitron font-bold text-hud-cyan mt-0.5" id="weather-temp">+21°C</div>
+                        <div class="text-[9px] text-emerald-400 mt-0.5">Musaffo osmon</div>
+                    </div>
+                    <div class="p-2.5 bg-slate-900/60 rounded-lg border border-hud-cyan/20">
+                        <div class="text-slate-400 text-[9px]">AQSH DOLLARI</div>
+                        <div class="text-lg font-orbitron font-bold text-amber-400 mt-0.5">12,850</div>
+                        <div class="text-[9px] text-slate-400 mt-0.5">MB kursi</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="hud-card p-3 rounded-xl shrink-0">
+                <div class="flex justify-between pb-1.5 mb-1.5 border-b border-hud-cyan/20 font-orbitron text-xs text-amber-400">
+                    <span><i class="fa-solid fa-gem mr-1"></i> ZERRIA PERFUME</span>
+                    <span class="text-amber-400 font-mono text-[10px]">STATISTIKA</span>
+                </div>
+                <div class="p-2.5 bg-amber-950/20 border border-amber-500/30 rounded-lg font-mono">
+                    <div class="text-[9px] text-amber-300/80">BUGUNGI KASSA TUSHUMI</div>
+                    <div class="text-xl font-orbitron font-black text-amber-300 mt-0.5">2,450,000 SO'M</div>
+                    <div class="text-[9px] text-emerald-400 mt-0.5 flex items-center gap-1">
+                        <i class="fa-solid fa-arrow-trend-up"></i> Barqaror o'sish dinamikasi
+                    </div>
+                </div>
+            </div>
+
+            <!-- СИСТЕМНЫЙ ЖУРНАЛ -->
+            <div class="hud-card p-3 rounded-xl flex-1 flex flex-col overflow-hidden min-h-[105px]">
+                <div class="font-orbitron text-xs text-hud-cyan pb-1.5 mb-1.5 border-b border-hud-cyan/20">
+                    <i class="fa-solid fa-list-check mr-1"></i> TIZIM JURNALI
+                </div>
+                <div id="event-log-container" class="flex-1 overflow-y-auto space-y-1 font-mono text-[10px] text-slate-300">
+                    <div class="p-1 rounded bg-slate-900/50 border-l-2 border-emerald-400">
+                        <span class="text-slate-500">[TIZIM]</span> <span class="text-emerald-300">Mark-85 boshqaruv markazi tayyor.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ОКНО КАМЕРЫ ПОД ЖУРНАЛОМ -->
+            <div class="hud-card p-2.5 rounded-xl shrink-0">
+                <div class="flex justify-between items-center font-mono text-[10px] text-hud-cyan pb-1.5 mb-1 border-b border-hud-cyan/20">
+                    <span><i class="fa-solid fa-camera mr-1"></i> JARVIS // OPTIK SENSOR</span>
+                    <span class="text-emerald-400 font-bold">JONLI EFIR</span>
+                </div>
+                <div class="hud-cam-container">
+                    <video id="cam" autoplay playsinline muted></video>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <footer class="w-full border-t border-hud-cyan/20 bg-slate-950 px-6 py-2 flex items-center justify-between text-xs font-mono text-slate-400 shrink-0">
+        <div>STARK OS MARK-85 // FOYDALANUVCHI: BAHROMJON</div>
+        <div class="text-hud-cyan text-[11px]">J.A.R.V.I.S TACTICAL SYSTEM • O'ZBEKISTON KANALI</div>
+    </footer>
+
+    <script>
+        const CFG = {
+            ASK_URL: "/api/ask",
+            TTS_URL: "/api/tts",
+            GREETING_URL: "/api/greeting",
+            LANG: "uz-UZ",
+            SILENCE_MS: 2000,
+            MIN_CONFIDENCE: 0.35,
+            MIN_CHARS: 3,
+            RESUME_DELAY_MS: 450,
+            DEDUPE_MS: 4000
+        };
+
+        const SESSION_ID = crypto.randomUUID?.() || String(Date.now());
+
+        const S = {
+            active: false,
+            paused: true,
+            running: false,
+            committed: "",
+            sessionText: "",
+            lastSeen: "",
+            timer: null,
+            restartDelay: 250,
+            lastSent: "",
+            lastSentAt: 0
+        };
+
+        let currentAudio = null;
+        const silenceFill = document.getElementById("silenceFill");
+
+        function updateHUDClock() {
+            const now = new Date();
+            document.getElementById('live-time').innerText = now.toTimeString().split(' ')[0];
+        }
+        setInterval(updateHUDClock, 1000);
+        updateHUDClock();
+
+        const canvas = document.getElementById('waveform-canvas');
+        const ctx = canvas.getContext('2d');
+        let waveStep = 0;
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth * 0.75;
+            canvas.height = 32;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        function drawWaveform() {
+            requestAnimationFrame(drawWaveform);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const numBars = 32;
+            const barWidth = canvas.width / numBars;
+            waveStep += 0.08;
+            for (let i = 0; i < numBars; i++) {
+                const multiplier = !S.paused ? 1.8 : 0.6;
+                const dynamicHeight = (Math.sin(waveStep + i * 0.3) * 11 + 13) * multiplier;
+                const x = i * barWidth;
+                const y = (canvas.height - dynamicHeight) / 2;
+                ctx.fillStyle = '#00f3ff';
+                ctx.fillRect(x + 2, y, barWidth - 4, dynamicHeight);
+            }
+        }
+        drawWaveform();
+
+        function showSilenceBar() {
+            silenceFill.style.transition = "none";
+            silenceFill.style.width = "100%";
+            void silenceFill.offsetWidth;
+            silenceFill.style.transition = `width ${CFG.SILENCE_MS}ms linear`;
+            silenceFill.style.width = "0%";
+        }
+        function hideSilenceBar() {
+            silenceFill.style.transition = "none";
+            silenceFill.style.width = "0%";
+        }
+
+        // Логика распознавания речи от Claude
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const rec = SR ? new SR() : null;
+
+        if (rec) {
+            rec.lang = CFG.LANG;
+            rec.continuous = true;
+            rec.interimResults = true;
+            rec.maxAlternatives = 1;
+
+            rec.onstart = () => { S.running = true; };
+
+            rec.onend = () => {
+                S.running = false;
+                if (S.active && !S.paused) {
+                    if (S.sessionText) S.committed = `${S.committed} ${S.sessionText}`.trim();
+                    S.sessionText = "";
+                    setTimeout(startRec, S.restartDelay);
+                } else {
+                    S.sessionText = "";
+                }
+            };
+
+            rec.onresult = (e) => {
+                if (S.paused || !S.active) return;
+                S.restartDelay = 250;
+                S.sessionText = collectSessionText(e.results);
+                const full = currentText();
+                document.getElementById('hud-user-input').value = full;
+
+                if (hasSpeech(full) && full !== S.lastSeen) {
+                    S.lastSeen = full;
+                    armSilenceTimer();
+                }
+            };
+
+            rec.onerror = (e) => {
+                if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+                    S.active = false;
+                    document.getElementById('voice-hud-indicator').innerText = "JARVIS // MIKROFONGA RUXSAT BERILMADI";
+                }
+            };
+        }
+
+        const hasSpeech = (t) => /[\p{L}\p{N}]{2,}/u.test(t);
+        const currentText = () => `${S.committed} ${S.sessionText}`.replace(/\s+/g, " ").trim();
+
+        function collectSessionText(results) {
+            const parts = [];
+            for (let i = 0; i < results.length; i++) {
+                const r = results[i];
+                const alt = r[0];
+                if (!alt) continue;
+                if (r.isFinal && alt.confidence > 0 && alt.confidence < CFG.MIN_CONFIDENCE) continue;
+                const t = alt.transcript.replace(/\s+/g, " ").trim();
+                if (!t) continue;
+                const last = parts[parts.length - 1];
+                if (last && t.toLowerCase().startsWith(last.toLowerCase())) parts[parts.length - 1] = t;
+                else if (last && last.toLowerCase().endsWith(t.toLowerCase())) continue;
+                else parts.push(t);
+            }
+            return parts.join(" ");
+        }
+
+        function clearTimer() {
+            if (S.timer) { clearTimeout(S.timer); S.timer = null; }
+        }
+        function armSilenceTimer() {
+            clearTimer();
+            S.timer = setTimeout(flush, CFG.SILENCE_MS);
+            showSilenceBar();
+        }
+
+        function resetBuffers() {
+            S.committed = ""; S.sessionText = ""; S.lastSeen = "";
+        }
+
+        function flush() {
+            S.timer = null;
+            hideSilenceBar();
+            const text = currentText();
+            resetBuffers();
+
+            if (!hasSpeech(text) || text.length < CFG.MIN_CHARS) {
+                try { rec.abort(); } catch (e) {}
+                return;
+            }
+            const now = Date.now();
+            if (text === S.lastSent && now - S.lastSentAt < CFG.DEDUPE_MS) {
+                try { rec.abort(); } catch (e) {}
+                return;
+            }
+            S.lastSent = text; S.lastSentAt = now;
+            processUserCommand(text);
+        }
+
+        function startRec() {
+            if (!S.active || S.paused || S.running || !rec) return;
+            try { rec.start(); } catch (e) {}
+        }
+
+        function pauseMic() {
+            S.paused = true;
+            clearTimer();
+            hideSilenceBar();
+            resetBuffers();
+            const btn = document.getElementById('mic-toggle-btn');
+            btn.classList.remove('bg-red-950/80', 'border-red-500', 'text-red-400', 'animate-pulse');
+            try { rec.abort(); } catch (e) {}
+        }
+
+        function resumeMic() {
+            if (!S.active) return;
+            S.paused = false;
+            resetBuffers();
+            const btn = document.getElementById('mic-toggle-btn');
+            btn.classList.add('bg-red-950/80', 'border-red-500', 'text-red-400', 'animate-pulse');
+            document.getElementById('voice-hud-indicator').innerText = "JARVIS // SIZNI TINGLAMOQDA (GAPIRING)...";
+            startRec();
+        }
+
+        async function startCamera() {
+            const v = document.getElementById("cam");
+            if (!v) return;
+            try {
+                if (v.srcObject) {
+                    v.srcObject.getTracks().forEach(t => t.stop());
+                }
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                v.srcObject = stream;
+                await v.play();
+                appendEventLog("Optik sensor: Jonli efir ulandi ✓", "emerald");
+            } catch (err) {
+                appendEventLog("Kameraga ulanib bo'lmadi", "amber");
+            }
+        }
+
+        async function speak(text) {
+            pauseMic();
+            document.getElementById('voice-hud-indicator').innerText = "JARVIS // JAVOB BERMOQDA...";
+
+            let url = null;
+            try {
+                const res = await fetch(CFG.TTS_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ text })
+                });
+                if (!res.ok) throw new Error(`TTS xatosi ${res.status}`);
+                url = URL.createObjectURL(await res.blob());
+
+                await new Promise((resolve, reject) => {
+                    const audio = new Audio(url);
+                    audio.onended = resolve;
+                    audio.onerror = () => reject(new Error("Audio ijro etilmadi"));
+                    audio.play().catch(reject);
+                });
+            } catch (err) {
+                console.error(err);
+            } finally {
+                if (url) URL.revokeObjectURL(url);
+                setTimeout(resumeMic, CFG.RESUME_DELAY_MS);
+            }
+        }
+
+        async function manualActivate() {
+            if (S.active) {
+                if (!S.paused) pauseMic();
+                else resumeMic();
+                return;
+            }
+            S.active = true;
+            S.paused = true;
+
+            startCamera();
+
+            try {
+                const res = await fetch(CFG.GREETING_URL);
+                const { greeting } = await res.json();
+                if (greeting) {
+                    appendDialog('J.A.R.V.I.S', greeting);
+                    await speak(greeting);
+                } else {
+                    resumeMic();
+                }
+            } catch (err) {
+                resumeMic();
+            }
+        }
+
+        window.addEventListener('click', () => {
+            if (!S.active) manualActivate();
+        }, { once: true });
+
+        function appendDialog(sender, text, isUser = false) {
+            const feed = document.getElementById('hud-chat-feed');
+            const card = document.createElement('div');
+            card.className = `flex items-start gap-2.5 ${isUser ? 'justify-end' : ''}`;
+
+            if (!isUser) {
+                card.innerHTML = `
+                    <div class="w-7 h-7 rounded-full bg-cyan-950 border border-hud-cyan flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-robot text-hud-cyan text-xs"></i>
+                    </div>
+                    <div class="bg-slate-900/90 border border-hud-cyan/30 p-2.5 rounded-xl rounded-tl-none max-w-[85%]">
+                        <div class="text-[10px] font-mono text-hud-cyan font-bold mb-0.5">J.A.R.V.I.S</div>
+                        <p class="text-slate-100 text-sm leading-relaxed">${text}</p>
+                    </div>
+                `;
+            } else {
+                card.innerHTML = `
+                    <div class="bg-cyan-950/80 border border-hud-cyan/40 p-2.5 rounded-xl rounded-tr-none max-w-[85%] text-right">
+                        <div class="text-[10px] font-mono text-slate-400 mb-0.5">BAHROMJON</div>
+                        <p class="text-slate-100 text-sm">${text}</p>
+                    </div>
+                    <div class="w-7 h-7 rounded-full bg-slate-800 border border-slate-500 flex items-center justify-center shrink-0">
+                        <i class="fa-solid fa-user text-slate-300 text-xs"></i>
+                    </div>
+                `;
+            }
+            feed.appendChild(card);
+            feed.scrollTop = feed.scrollHeight;
+        }
+
+        function appendEventLog(message, type = 'cyan') {
+            const container = document.getElementById('event-log-container');
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0];
+            const div = document.createElement('div');
+            const colorClass = type === 'emerald' ? 'border-emerald-400 text-emerald-300' : 'border-hud-cyan text-hud-cyan';
+            div.className = `p-1 rounded bg-slate-900/50 border-l-2 ${colorClass}`;
+            div.innerHTML = `<span class="text-slate-500">[${timeStr}]</span> <span>${message}</span>`;
+            container.insertBefore(div, container.firstChild);
+        }
+
+        async function processUserCommand(query) {
+            if (!query.trim()) return;
+            pauseMic();
+            appendDialog('BAHROMJON', query, true);
+            document.getElementById('hud-user-input').value = '';
+            document.getElementById('voice-hud-indicator').innerText = "JARVIS // JAVOB TAYYORLANMOQDA...";
+
+            try {
+                const res = await fetch(CFG.ASK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: query, session_id: SESSION_ID })
+                });
+                const data = await res.json();
+                const reply = data.reply || "Buyruq bajarildi, Bahromjon.";
+                appendDialog('J.A.R.V.I.S', reply);
+                await speak(reply);
+            } catch (err) {
+                appendDialog('J.A.R.V.I.S', "Server bilan aloqada xatolik yuz berdi.");
+                setTimeout(resumeMic, 1500);
+            }
+        }
+
+        function handleInputKey(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                submitUserCommand();
+            }
+        }
+
+        function submitUserCommand() {
+            const input = document.getElementById('hud-user-input');
+            const val = input.value;
+            if (val.trim()) {
+                clearTimer();
+                hideSilenceBar();
+                processUserCommand(val);
+            }
+        }
+
+        function triggerQuickPrompt(txt) {
+            processUserCommand(txt);
+        }
+
+        function clearDialogLog() {
+            document.getElementById('hud-chat-feed').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
