@@ -141,7 +141,7 @@
             <div class="flex items-center gap-2">
                 <i class="fa-solid fa-microphone text-amber-400"></i>
                 <span class="text-slate-400">OVOZ:</span>
-                <span class="text-amber-400 font-semibold">Madina AI (2s Smart Silence)</span>
+                <span class="text-amber-400 font-semibold">Sardor AI (2s Smart Silence)</span>
             </div>
         </div>
 
@@ -205,10 +205,10 @@
                     <div>
                         <div class="flex justify-between mb-1">
                             <span class="text-slate-400">RAM XOTIRA</span>
-                            <span class="text-amber-400 font-bold">3.6 GB / 16 GB</span>
+                                                        <span class="text-amber-400 font-bold" id="ram-load-txt">-- GB / -- GB</span>
                         </div>
                         <div class="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden">
-                            <div class="h-full bg-amber-400" style="width: 25%"></div>
+                            <div id="ram-load-bar" class="h-full bg-amber-400" style="width: 0%"></div>
                         </div>
                     </div>
                 </div>
@@ -292,11 +292,11 @@
                     <div class="p-2.5 bg-slate-900/60 rounded-lg border border-hud-cyan/20">
                         <div class="text-slate-400 text-[9px]">HARORAT</div>
                         <div class="text-lg font-orbitron font-bold text-hud-cyan mt-0.5" id="weather-temp">+21°C</div>
-                        <div class="text-[9px] text-emerald-400 mt-0.5">Musaffo osmon</div>
+                        <div class="text-[9px] text-emerald-400 mt-0.5" id="weather-desc">Yuklanmoqda...</div>
                     </div>
                     <div class="p-2.5 bg-slate-900/60 rounded-lg border border-hud-cyan/20">
                         <div class="text-slate-400 text-[9px]">AQSH DOLLARI</div>
-                        <div class="text-lg font-orbitron font-bold text-amber-400 mt-0.5">12,850</div>
+                        <div class="text-lg font-orbitron font-bold text-amber-400 mt-0.5" id="usd-rate">...</div>
                         <div class="text-[9px] text-slate-400 mt-0.5">MB kursi</div>
                     </div>
                 </div>
@@ -309,7 +309,7 @@
                 </div>
                 <div class="p-2.5 bg-amber-950/20 border border-amber-500/30 rounded-lg font-mono">
                     <div class="text-[9px] text-amber-300/80">BUGUNGI KASSA TUSHUMI</div>
-                    <div class="text-xl font-orbitron font-black text-amber-300 mt-0.5">2,450,000 SO'M</div>
+                    <div class="text-xl font-orbitron font-black text-amber-300 mt-0.5">2 450 000 SO'M</div>
                     <div class="text-[9px] text-emerald-400 mt-0.5 flex items-center gap-1">
                         <i class="fa-solid fa-arrow-trend-up"></i> Barqaror o'sish dinamikasi
                     </div>
@@ -347,10 +347,15 @@
     </footer>
 
     <script>
+                // Sahifa Flask (:5000) orqali ochilgan bo'lsa nisbiy yo'l, aks holda (file://, Live Server) to'liq manzil
+        const API_BASE = (location.protocol.startsWith("http") && location.port === "5000")
+            ? ""
+            : "http://127.0.0.1:5000";
+
         const CFG = {
-            ASK_URL: "/api/ask",
-            TTS_URL: "/api/tts",
-            GREETING_URL: "/api/greeting",
+            ASK_URL: API_BASE + "/api/ask",
+            TTS_URL: API_BASE + "/api/tts",
+            GREETING_URL: API_BASE + "/api/greeting",
             LANG: "uz-UZ",
             SILENCE_MS: 2000,
             MIN_CONFIDENCE: 0.35,
@@ -564,26 +569,88 @@
             pauseMic();
             document.getElementById('voice-hud-indicator').innerText = "JARVIS // JAVOB BERMOQDA...";
 
-            let url = null;
             try {
+                console.log("[speak] TTS so'rovi:", text.substring(0, 60));
                 const res = await fetch(CFG.TTS_URL, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ text })
                 });
-                if (!res.ok) throw new Error(`TTS xatosi ${res.status}`);
-                url = URL.createObjectURL(await res.blob());
+
+                console.log("[speak] TTS javob:", res.status, res.statusText);
+
+                if (!res.ok) {
+                    let errMsg = `HTTP ${res.status}`;
+                    try {
+                        const errData = await res.json();
+                        errMsg = errData.error || errMsg;
+                    } catch (_) {}
+                    throw new Error(`TTS xatosi: ${errMsg}`);
+                }
+
+                const audioBlob = await res.blob();
+                console.log("[speak] Audio blob:", audioBlob.size, "bytes");
+
+                if (!audioBlob || audioBlob.size < 100) {
+                    throw new Error("Audio blob kichik yoki bo'sh");
+                }
+
+                const audioUrl = URL.createObjectURL(audioBlob);
+                console.log("[speak] Audio URL yaratildi");
 
                 await new Promise((resolve, reject) => {
-                    const audio = new Audio(url);
-                    audio.onended = resolve;
-                    audio.onerror = () => reject(new Error("Audio ijro etilmadi"));
-                    audio.play().catch(reject);
+                    const audio = new Audio(audioUrl);
+                    let timeoutId = null;
+
+                    const cleanup = () => {
+                        if (timeoutId) clearTimeout(timeoutId);
+                        audio.pause();
+                        URL.revokeObjectURL(audioUrl);
+                    };
+
+                    audio.oncanplaythrough = () => {
+                        console.log("[speak] Audio o'qiy boshladi");
+                    };
+
+                    audio.onended = () => {
+                        console.log("[speak] Audio tugadi");
+                        cleanup();
+                        resolve();
+                    };
+
+                    audio.onerror = (err) => {
+                        console.error("[speak] Audio xatosi:", err);
+                        cleanup();
+                        reject(new Error("Audio ijro etilmadi"));
+                    };
+
+                    audio.onplay = () => {
+                        console.log("[speak] Audio o'qiymoqda");
+                    };
+
+                    console.log("[speak] Audio play() chaqirish...");
+                    timeoutId = setTimeout(() => {
+                        console.warn("[speak] Audio timeout (30s)");
+                        cleanup();
+                        resolve();
+                    }, 30000);
+
+                    audio.play().catch(err => {
+                        console.error("[speak] play() xatosi:", err);
+                        cleanup();
+                        if (err.name === 'NotAllowedError') {
+                            console.warn("[speak] Brauzer ovoz ijrosiga ruxsat bermadi");
+                            resolve();
+                        } else {
+                            reject(err);
+                        }
+                    });
                 });
+
             } catch (err) {
-                console.error(err);
+                console.error("[speak] Xatolik:", err);
+                appendEventLog(`TTS xatosi: ${err.message}`, 'amber');
             } finally {
-                if (url) URL.revokeObjectURL(url);
                 setTimeout(resumeMic, CFG.RESUME_DELAY_MS);
             }
         }
@@ -671,15 +738,75 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message: query, session_id: SESSION_ID })
                 });
-                const data = await res.json();
+                let data = {};
+                try { data = await res.json(); } catch (_) {}
+                if (!res.ok) {
+                    const errMsg = data.reply || `Server javobi: HTTP ${res.status}`;
+                    throw new Error(errMsg);
+                }
                 const reply = data.reply || "Buyruq bajarildi, Bahromjon.";
                 appendDialog('J.A.R.V.I.S', reply);
                 await speak(reply);
             } catch (err) {
-                appendDialog('J.A.R.V.I.S', "Server bilan aloqada xatolik yuz berdi.");
+                console.error("[processUserCommand]", err);
+                let errorText = "Server bilan aloqada xatolik yuz berdi.";
+                if (err.message.includes("fetch")) {
+                    errorText = "Internet ulanishi mavjud emas yoki server offline.";
+                }
+                appendDialog('J.A.R.V.I.S', errorText);
+                appendEventLog(`Xato: ${err.message}`, 'amber');
                 setTimeout(resumeMic, 1500);
             }
         }
+
+        async function refreshLiveData() {
+            try {
+                const res = await fetch(API_BASE + "/api/live");
+                const d = await res.json();
+                if (d.temp !== undefined && d.temp !== null) {
+                    const sign = d.temp > 0 ? "+" : "";
+                    document.getElementById('weather-temp').innerText = `${sign}${d.temp}°C`;
+                    const w = d.weather || "";
+                    document.getElementById('weather-desc').innerText = w.charAt(0).toUpperCase() + w.slice(1);
+                }
+                if (d.usd) {
+                    document.getElementById('usd-rate').innerText =
+                        Math.round(d.usd).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+                }
+            } catch (err) {
+                console.error("[refreshLiveData]", err);
+            }
+        }
+        refreshLiveData();
+        setInterval(refreshLiveData, 5 * 60 * 1000);
+
+        async function refreshSystemData() {
+            try {
+                const res = await fetch(API_BASE + "/api/system");
+                const d = await res.json();
+                if (!d.ok) {
+                    console.error("System API xatosi:", d.error);
+                    return;
+                }
+
+                const cpuVal = d.cpu_percent !== undefined ? d.cpu_percent : 0;
+                document.getElementById('cpu-load-txt').innerText = `${cpuVal}%`;
+                document.getElementById('cpu-load-bar').style.width = `${cpuVal}%`;
+
+                if (d.ram_used_gb !== undefined && d.ram_total_gb !== undefined) {
+                    const ramPct = d.ram_total_gb > 0 ? Math.round((d.ram_used_gb / d.ram_total_gb) * 100) : 0;
+                    document.getElementById('ram-load-txt').innerText = `${d.ram_used_gb} GB / ${d.ram_total_gb} GB`;
+                    document.getElementById('ram-load-bar').style.width = `${ramPct}%`;
+                } else {
+                    document.getElementById('ram-load-txt').innerText = `-- GB / -- GB`;
+                }
+            } catch (err) {
+                console.error("[refreshSystemData]", err);
+                document.getElementById('ram-load-txt').innerText = `-- GB / -- GB`;
+            }
+        }
+        refreshSystemData();
+        setInterval(refreshSystemData, 5000);
 
         function handleInputKey(e) {
             if (e.key === 'Enter') {

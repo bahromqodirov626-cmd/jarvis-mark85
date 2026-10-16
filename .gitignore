@@ -1,4 +1,16 @@
 kalit.txt
+.env
 __pycache__/
 *.pyc
-.env
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+*.egg-info/
+dist/
+build/
+.DS_Store
+*.log
+.vscode/
+.idea/
