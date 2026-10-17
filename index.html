@@ -347,10 +347,8 @@
     </footer>
 
     <script>
-                // Sahifa Flask (:5000) orqali ochilgan bo'lsa nisbiy yo'l, aks holda (file://, Live Server) to'liq manzil
-        const API_BASE = (location.protocol.startsWith("http") && location.port === "5000")
-            ? ""
-            : "http://127.0.0.1:5000";
+                        // Use same-origin relative endpoints in local and production deployments.
+        const API_BASE = "";
 
         const CFG = {
             ASK_URL: API_BASE + "/api/ask",
