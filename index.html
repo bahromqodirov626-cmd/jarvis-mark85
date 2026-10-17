@@ -563,94 +563,130 @@
             }
         }
 
+        async function speakWithBrowser(text) {
+            if (!('speechSynthesis' in window)) {
+                console.warn("[WebSpeech] Brauzerda Web Speech API mavjud emas");
+                return;
+            }
+            return new Promise((resolve) => {
+                try {
+                    window.speechSynthesis.cancel();
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    const voices = window.speechSynthesis.getVoices() || [];
+
+                    // Eng mos ovozni tanlash (uzbek, turk, rus yoki tizim standarti)
+                    const preferredVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('uz')) ||
+                                           voices.find(v => v.lang && v.lang.toLowerCase().startsWith('tr')) ||
+                                           voices.find(v => v.lang && v.lang.toLowerCase().startsWith('ru')) ||
+                                           voices.find(v => v.lang && v.lang.toLowerCase().startsWith('en')) ||
+                                           voices[0];
+
+                    if (preferredVoice) {
+                        utterance.voice = preferredVoice;
+                        utterance.lang = preferredVoice.lang;
+                    } else {
+                        utterance.lang = 'uz-UZ';
+                    }
+
+                    utterance.rate = 1.0;
+                    utterance.pitch = 0.95;
+
+                    let timeoutId = setTimeout(() => {
+                        resolve();
+                    }, Math.max(4000, text.length * 120));
+
+                    utterance.onend = () => {
+                        clearTimeout(timeoutId);
+                        resolve();
+                    };
+                    utterance.onerror = (e) => {
+                        clearTimeout(timeoutId);
+                        console.warn("[WebSpeech] Utterance xatosi:", e);
+                        resolve();
+                    };
+
+                    window.speechSynthesis.speak(utterance);
+                } catch (e) {
+                    console.error("[WebSpeech] Sintez xatosi:", e);
+                    resolve();
+                }
+            });
+        }
+
         async function speak(text) {
             pauseMic();
             document.getElementById('voice-hud-indicator').innerText = "JARVIS // JAVOB BERMOQDA...";
 
+            let played = false;
+
             try {
-                console.log("[speak] TTS so'rovi:", text.substring(0, 60));
+                console.log("[speak] Server TTS so'rovi:", text.substring(0, 60));
                 const res = await fetch(CFG.TTS_URL, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ text })
                 });
 
-                console.log("[speak] TTS javob:", res.status, res.statusText);
+                const contentType = (res.headers.get("content-type") || "").toLowerCase();
 
-                if (!res.ok) {
-                    let errMsg = `HTTP ${res.status}`;
-                    try {
-                        const errData = await res.json();
-                        errMsg = errData.error || errMsg;
-                    } catch (_) {}
-                    throw new Error(`TTS xatosi: ${errMsg}`);
-                }
+                if (res.ok && contentType.includes("audio")) {
+                    const audioBlob = await res.blob();
+                    if (audioBlob && audioBlob.size > 100) {
+                        const audioUrl = URL.createObjectURL(audioBlob);
+                        try {
+                            await new Promise((resolve, reject) => {
+                                const audio = new Audio(audioUrl);
+                                let timeoutId = null;
 
-                const audioBlob = await res.blob();
-                console.log("[speak] Audio blob:", audioBlob.size, "bytes");
+                                const cleanup = () => {
+                                    if (timeoutId) clearTimeout(timeoutId);
+                                    audio.pause();
+                                    URL.revokeObjectURL(audioUrl);
+                                };
 
-                if (!audioBlob || audioBlob.size < 100) {
-                    throw new Error("Audio blob kichik yoki bo'sh");
-                }
+                                audio.onended = () => {
+                                    cleanup();
+                                    played = true;
+                                    resolve();
+                                };
 
-                const audioUrl = URL.createObjectURL(audioBlob);
-                console.log("[speak] Audio URL yaratildi");
+                                audio.onerror = (err) => {
+                                    cleanup();
+                                    reject(err);
+                                };
 
-                await new Promise((resolve, reject) => {
-                    const audio = new Audio(audioUrl);
-                    let timeoutId = null;
+                                timeoutId = setTimeout(() => {
+                                    cleanup();
+                                    resolve();
+                                }, 35000);
 
-                    const cleanup = () => {
-                        if (timeoutId) clearTimeout(timeoutId);
-                        audio.pause();
-                        URL.revokeObjectURL(audioUrl);
-                    };
-
-                    audio.oncanplaythrough = () => {
-                        console.log("[speak] Audio o'qiy boshladi");
-                    };
-
-                    audio.onended = () => {
-                        console.log("[speak] Audio tugadi");
-                        cleanup();
-                        resolve();
-                    };
-
-                    audio.onerror = (err) => {
-                        console.error("[speak] Audio xatosi:", err);
-                        cleanup();
-                        reject(new Error("Audio ijro etilmadi"));
-                    };
-
-                    audio.onplay = () => {
-                        console.log("[speak] Audio o'qiymoqda");
-                    };
-
-                    console.log("[speak] Audio play() chaqirish...");
-                    timeoutId = setTimeout(() => {
-                        console.warn("[speak] Audio timeout (30s)");
-                        cleanup();
-                        resolve();
-                    }, 30000);
-
-                    audio.play().catch(err => {
-                        console.error("[speak] play() xatosi:", err);
-                        cleanup();
-                        if (err.name === 'NotAllowedError') {
-                            console.warn("[speak] Brauzer ovoz ijrosiga ruxsat bermadi");
-                            resolve();
-                        } else {
-                            reject(err);
+                                audio.play().then(() => {
+                                    played = true;
+                                }).catch(err => {
+                                    cleanup();
+                                    reject(err);
+                                });
+                            });
+                        } catch (playErr) {
+                            console.warn("[speak] Audio element ijro xatosi (Autoplay yoki format):", playErr);
                         }
-                    });
-                });
-
+                    }
+                } else {
+                    console.warn("[speak] Server audio qaytarmadi yoki fallback so'radi");
+                }
             } catch (err) {
-                console.error("[speak] Xatolik:", err);
-                appendEventLog(`TTS xatosi: ${err.message}`, 'amber');
-            } finally {
-                setTimeout(resumeMic, CFG.RESUME_DELAY_MS);
+                console.warn("[speak] TTS server ulanishida xatolik:", err);
             }
+
+            // Agar server audio ijro etilmagan bo'lsa (server xatosi, blokirovka yoki autoplay cheklovi),
+            // zudlik bilan brauzerning ichki Web Speech API orqali javob ovozda o'qiladi:
+            if (!played) {
+                console.log("[speak] Web Speech API zaxira ovoziga o'tildi...");
+                appendEventLog("Brauzer nutq sintezi (WebSpeech) faollashtirildi ✓", "cyan");
+                await speakWithBrowser(text);
+            }
+
+            setTimeout(resumeMic, CFG.RESUME_DELAY_MS);
         }
 
         async function manualActivate() {
@@ -677,6 +713,32 @@
                 resumeMic();
             }
         }
+
+        function unlockAudioContext() {
+            try {
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.getVoices();
+                }
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                if (AudioCtx) {
+                    const ctx = new AudioCtx();
+                    if (ctx.state === 'suspended') {
+                        ctx.resume();
+                    }
+                }
+            } catch (_) {}
+        }
+
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.onvoiceschanged = () => {
+                window.speechSynthesis.getVoices();
+            };
+            window.speechSynthesis.getVoices();
+        }
+
+        window.addEventListener('click', unlockAudioContext, { once: true });
+        window.addEventListener('touchstart', unlockAudioContext, { once: true });
+        window.addEventListener('keydown', unlockAudioContext, { once: true });
 
         window.addEventListener('click', () => {
             if (!S.active) manualActivate();
